@@ -1,0 +1,5 @@
+setup.py
+Warden.egg-info/PKG-INFO
+Warden.egg-info/SOURCES.txt
+Warden.egg-info/dependency_links.txt
+Warden.egg-info/top_level.txt

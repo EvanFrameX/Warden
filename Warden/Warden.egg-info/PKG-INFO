@@ -1,0 +1,9 @@
+Metadata-Version: 2.2
+Name: Warden
+Version: 0.0.1
+Summary: Warden makes it easier to use Pygame
+Author: EvanFrameX
+Author-email: <piescandale@gmail.com>
+Dynamic: author
+Dynamic: author-email
+Dynamic: summary
