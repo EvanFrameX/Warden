@@ -25,8 +25,75 @@ class WardenEngine:
         self._init_colors()
         self.debug_mode = False
         
-    # ... (previous methods remain the same) ...
-
+    def _init_colors(self):
+        """Initialize common colors as properties."""
+        self.colors = {
+            'black': (0, 0, 0),
+            'white': (255, 255, 255),
+            'red': (255, 0, 0),
+            'green': (0, 255, 0),
+            'blue': (0, 0, 255),
+            'yellow': (255, 255, 0),
+            'cyan': (0, 255, 255),
+            'magenta': (255, 0, 255),
+            'gray': (128, 128, 128),
+            'dark_gray': (64, 64, 64),
+            'light_gray': (192, 192, 192)
+        }
+        
+    def color(self, name: str) -> Tuple[int, int, int]:
+        """Get a color by name or RGB tuple."""
+        if isinstance(name, str):
+            return self.colors.get(name.lower(), (0, 0, 0))
+        return name
+    
+    def add_scene(self, name: str, scene: 'Scene'):
+        """Add a scene to the game."""
+        self.scenes[name] = scene
+        scene.game = self
+        
+    def set_scene(self, name: str):
+        """Set the current active scene."""
+        if name in self.scenes:
+            if self.current_scene:
+                self.current_scene.exit()
+            self.current_scene = self.scenes[name]
+            self.current_scene.enter()
+        
+    def load_image(self, path: str, key: str = None, scale: float = 1.0, alpha: bool = True) -> pygame.Surface:
+        """
+        Load an image from file.
+        
+        Args:
+            path: Path to image file
+            key: Optional key to store the asset
+            scale: Scale factor (1.0 = original size)
+            alpha: Whether to preserve alpha channel
+            
+        Returns:
+            Loaded pygame Surface
+        """
+        try:
+            if alpha:
+                img = pygame.image.load(path).convert_alpha()
+            else:
+                img = pygame.image.load(path).convert()
+                
+            if scale != 1.0:
+                new_size = (int(img.get_width() * scale), int(img.get_height() * scale))
+                img = pygame.transform.scale(img, new_size)
+                
+            if key:
+                self.assets[key] = img
+                
+            return img
+        except Exception as e:
+            print(f"Error loading image {path}: {e}")
+            # Return a placeholder surface
+            surf = pygame.Surface((32, 32))
+            surf.fill((255, 0, 255))  # Magenta error color
+            return surf
+    
     def load_spritesheet(self, path: str, key: str, frame_width: int, frame_height: int, 
                         scale: float = 1.0, alpha: bool = True) -> List[pygame.Surface]:
         """
@@ -91,6 +158,32 @@ class WardenEngine:
         
         self.assets[key] = tiles
         return tiles
+    
+    def load_sound(self, path: str, key: str = None) -> pygame.mixer.Sound:
+        try:
+            sound = pygame.mixer.Sound(path)
+            if key:
+                self.assets[key] = sound
+            return sound
+        except Exception as e:
+            print(f"Error loading sound {path}: {e}")
+            # Return a silent sound
+            return pygame.mixer.Sound(buffer=bytes([0] * 44))
+    
+    def create_font(self, size: int = 24, name: str = None, key: str = None) -> pygame.font.Font:
+        try:
+            if name:
+                font = pygame.font.SysFont(name, size)
+            else:
+                font = pygame.font.Font(None, size)
+                
+            if key:
+                self.assets[key] = font
+                
+            return font
+        except Exception as e:
+            print(f"Error creating font: {e}")
+            return pygame.font.Font(None, size)
     
     def toggle_debug(self):
         """Toggle debug mode for visualizing collision boxes and other info."""
@@ -481,7 +574,7 @@ class Particle:
             surface.set_at((int(self.x), int(self.y)), self.color[:3] + (min(255, self.alpha),))
         else:
             s = pygame.Surface((self.size*2, self.size*2), pygame.SRCALPHA)
-            pygame.draw.circle(s, self.color[:3] + (min(255, self.alpha),), 
+            pygame.draw.circle(s, self.color[:3] + (min(255, self.alpha)), 
                              (self.size, self.size), self.size)
             surface.blit(s, (self.x - self.size, self.y - self.size))
 
@@ -767,4 +860,120 @@ class ProgressBar(UIElement):
         pygame.draw.rect(surface, self.colors['border'], bg_rect, 
                         self.border_width, border_radius=self.corner_radius)
 
-# ... (previous Events, Input, and Audio classes remain the same) ...
+class Events:
+    """Simplified event system."""
+    
+    def __init__(self):
+        self.listeners: Dict[int, List[Callable]] = {}
+        
+    def add_listener(self, event_type: int, callback: Callable):
+        """Add an event listener."""
+        if event_type not in self.listeners:
+            self.listeners[event_type] = []
+        self.listeners[event_type].append(callback)
+        
+    def remove_listener(self, event_type: int, callback: Callable):
+        """Remove an event listener."""
+        if event_type in self.listeners and callback in self.listeners[event_type]:
+            self.listeners[event_type].remove(callback)
+            
+    def process_event(self, event: pygame.event.Event):
+        """Process a pygame event."""
+        if event.type in self.listeners:
+            for callback in self.listeners[event.type]:
+                callback(event)
+                
+    def update(self):
+        """Update event system (called each frame)."""
+        pass
+
+class Input:
+    """Simplified input handling."""
+    
+    def __init__(self):
+        self.keys = {}
+        self.mouse_buttons = [False] * 5
+        self.mouse_pos = (0, 0)
+        self.mouse_rel = (0, 0)
+        
+    def update(self):
+        """Update input state."""
+        self.keys = pygame.key.get_pressed()
+        self.mouse_buttons = pygame.mouse.get_pressed()
+        self.mouse_pos = pygame.mouse.get_pos()
+        self.mouse_rel = pygame.mouse.get_rel()
+        
+    def process_event(self, event: pygame.event.Event):
+        """Process input-related events."""
+        pass
+        
+    def key_down(self, key: int) -> bool:
+        """Check if a key is currently pressed."""
+        return self.keys.get(key, False)
+        
+    def mouse_down(self, button: int = 0) -> bool:
+        """Check if a mouse button is currently pressed."""
+        if 0 <= button < len(self.mouse_buttons):
+            return self.mouse_buttons[button]
+        return False
+        
+    def get_mouse_pos(self) -> Tuple[int, int]:
+        """Get current mouse position."""
+        return self.mouse_pos
+
+class Audio:
+    """Simplified audio system."""
+    
+    def __init__(self):
+        pygame.mixer.init()
+        self.music_volume = 0.5
+        self.sfx_volume = 0.5
+        
+    def play_music(self, path: str, loops: int = -1, volume: float = None):
+        """
+        Play background music.
+        
+        Args:
+            path: Path to music file
+            loops: Number of loops (-1 for infinite)
+            volume: Volume (0.0 to 1.0)
+        """
+        if volume is None:
+            volume = self.music_volume
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.set_volume(volume)
+        pygame.mixer.music.play(loops)
+        
+    def stop_music(self):
+        """Stop background music."""
+        pygame.mixer.music.stop()
+        
+    def pause_music(self):
+        """Pause background music."""
+        pygame.mixer.music.pause()
+        
+    def resume_music(self):
+        """Resume paused background music."""
+        pygame.mixer.music.unpause()
+        
+    def play_sound(self, sound: pygame.mixer.Sound, volume: float = None):
+        """
+        Play a sound effect.
+        
+        Args:
+            sound: Sound object to play
+            volume: Volume (0.0 to 1.0)
+        """
+        if volume is None:
+            volume = self.sfx_volume
+        sound.set_volume(volume)
+        sound.play()
+        
+    def set_music_volume(self, volume: float):
+        """Set music volume (0.0 to 1.0)."""
+        self.music_volume = max(0.0, min(1.0, volume))
+        pygame.mixer.music.set_volume(self.music_volume)
+        
+    def set_sfx_volume(self, volume: float):
+        """Set sound effects volume (0.0 to 1.0)."""
+        self.sfx_volume = max(0.0, min(1.0, volume))
